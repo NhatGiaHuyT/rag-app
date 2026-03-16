@@ -1,8 +1,11 @@
 # RAG Application with Haystack, React UI, OpenSearch, and OpenAI
 
-## Overview
+## Features
 
-This project is an example Retrieval-Augmented Generation (RAG) application built with Haystack. It demonstrates how to create a functional search and generative question-answering system with a user-friendly interface.
+- **Authentication**: User registration and login system
+- **Conversation Memory**: Maintains conversation history for contextual Q&A
+- **Document Upload**: Support for PDF and TXT files
+- **RAG Pipeline**: Uses Haystack 2.0 with OpenSearch for document retrieval and OpenAI for generation
 
 ### Backend
 The [backend](https://github.com/deepset-ai/haystack-rag-app/tree/main/backend) is built with [FastAPI](https://github.com/fastapi/fastapi) and [Haystack 2](https://github.com/deepset-ai/haystack). It provides a RAG pipeline using [OpenAIGenerator](https://docs.haystack.deepset.ai/docs/openaigenerator).
@@ -28,7 +31,7 @@ To quickly test this application, do the following:
    ```
    cp .env.example .env
    ```
-   Edit the .env file accordingly. Change the `OPENSEARCH_PASSWORD`. Add `OPENAI_API_KEY`. OpenSearch host URL doesn't have to be changed if running this example with Docker Compose.
+   Edit the .env file accordingly. Change the `OPENSEARCH_PASSWORD`, add `OPENAI_API_KEY`, and set a `SECRET_KEY` for JWT tokens. OpenSearch host URL doesn't have to be changed if running this example with Docker Compose.
 
 4. Start the application using Docker Compose:
    ```
@@ -55,10 +58,12 @@ query_service-1     | INFO:     127.0.0.1:58698 - "GET /health HTTP/1.1" 200 OK
 
 1. Ensure that all containers are running and the backend is ready.
 2. Open your web browser and navigate to [http://localhost:8080](http://localhost:8080).
-3. Use the interface to upload documents that you want to search through. Uploaded files are stored in the `files/uploads` directory inside the backend containers (Docker Compose will mount a volume for this). Currently, the frontend code limits a one-time upload to 110MB.
-4. Uploading large files may take a while since the files are indexed synchronously.
-5. Once documents are uploaded, you can ask questions and search the documents.
-6. The query backend service will use the RAG pipeline to process your query and return relevant results.
+3. Register a new account or login with existing credentials.
+4. Use the interface to upload documents that you want to search through. Uploaded files are stored in the `files/uploads` directory inside the backend containers (Docker Compose will mount a volume for this). Currently, the frontend code limits a one-time upload to 110MB.
+5. Create or select a conversation from the sidebar to maintain context across questions.
+6. Uploading large files may take a while since the files are indexed synchronously.
+7. Once documents are uploaded, you can ask questions and search the documents. The system will use conversation history for more contextual responses.
+8. The query backend service will use the RAG pipeline to process your query and return relevant results.
 
 **Note**: This RAG application currently supports only PDF, TXT, and Markdown file formats.
 
@@ -159,11 +164,17 @@ helm install hra . -f values.yaml
 
 ## API Routes
 
-The following _unauthenticated_ API routes are available via the nginx proxy:
+The following API routes are available via the nginx proxy:
 
-- `POST /api/search`: Accepts a search query and returns results from the RAG pipeline.
-- `GET /api/files`: Returns a list of all uploaded files.
-- `POST /api/files`: Allows uploading of files to be indexed by the RAG pipeline.
+- `POST /api/auth/register`: Register a new user.
+- `POST /api/auth/token`: Login and obtain an access token.
+- `POST /api/auth/conversations`: Create a new conversation.
+- `GET /api/auth/conversations`: Get user's conversations.
+- `GET /api/auth/conversations/{id}/messages`: Get messages for a conversation.
+- `POST /api/auth/conversations/{id}/messages`: Add a message to a conversation.
+- `POST /api/search`: Accepts a search query and returns results from the RAG pipeline (requires authentication, supports conversation context).
+- `GET /api/files`: Returns a list of all uploaded files (requires authentication).
+- `POST /api/files`: Allows uploading of files to be indexed by the RAG pipeline (requires authentication).
 - `GET /api/health`: Returns a simple "OK" response to check if the nginx proxy is running.
 
 ## Troubleshooting

@@ -6,6 +6,8 @@ from uuid import UUID
 class SearchQuery(BaseModel):
     query: str = Field(..., description="The search query string")
     filters: Optional[dict] = Field(None, description="Optional filters for the search")
+    conversation_id: Optional[int] = Field(None, description="Optional conversation ID for context")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(None, description="Optional conversation history as list of {'role': 'user/assistant', 'content': 'text'}")
 
 
 class SearchResponse(BaseModel):

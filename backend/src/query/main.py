@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import json
 import logging
 from typing import List
+import httpx
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
@@ -13,6 +14,7 @@ from common.api_utils import create_api
 from common.models import SearchQuery, QueryResultsResponse
 from common.document_store import initialize_document_store
 from common.config import settings
+from common.auth_utils import get_current_user
 from query.service import QueryService
 from query.serializer import serialize_query_result
 
@@ -48,10 +50,23 @@ def get_query_service():
         raise HTTPException(status_code=500, detail="QueryService not initialized")
     return query_service
 
+async def get_allowed_document_ids(user_id: int, token: str) -> List[int]:
+    auth_url = settings.auth_service_url or "http://localhost:8001"
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{auth_url}/documents/ids", headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logger.error(f"Failed to get allowed documents: {response.status_code}")
+            return []
+
 @app.post("/search", response_model=QueryResultsResponse)
 async def search(
     query: SearchQuery,
-    service: QueryService = Depends(get_query_service)
+    service: QueryService = Depends(get_query_service),
+    current_user: int = Depends(get_current_user),
+    token: str = Depends(get_token)
 ) -> QueryResultsResponse:
     """
     Perform a search based on the provided query and filters.
@@ -75,7 +90,11 @@ async def search(
     logger.info(f"Received search query: {query.query}")
 
     try:
-        answer = service.search(query.query, query.filters)
+        allowed_ids = await get_allowed_document_ids(current_user, token)
+        filters = query.filters or {}
+        if allowed_ids:
+            filters["_id"] = {"$in": allowed_ids}
+        answer = service.search(query.query, filters, query.conversation_history)
         response = serialize_query_result(query.query, answer)
 
         logger.info(f"QueryResultsResponse:\n{response}")

@@ -12,6 +12,7 @@ from common.api_utils import create_api
 from common.models import FilesUploadResponse, FilesListResponse
 from common.document_store import initialize_document_store
 from common.config import settings
+from common.auth_utils import get_current_user
 from indexing.service import IndexingService
 
 
@@ -53,7 +54,8 @@ def get_indexing_service():
 @app.post("/files", response_model=List[FilesUploadResponse])
 async def upload_files(
     files: List[UploadFile] = File(...),
-    service: IndexingService = Depends(get_indexing_service)
+    service: IndexingService = Depends(get_indexing_service),
+    current_user: int = Depends(get_current_user)
 ) -> JSONResponse:
     """
     Upload and index multiple files.
@@ -103,7 +105,8 @@ async def upload_files(
 
 @app.get("/files", response_model=FilesListResponse)
 async def get_files(
-    service: IndexingService = Depends(get_indexing_service)
+    service: IndexingService = Depends(get_indexing_service),
+    current_user: int = Depends(get_current_user)
 ) -> FilesListResponse:
     """
     Retrieve a list of all indexed files.

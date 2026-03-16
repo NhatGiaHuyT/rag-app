@@ -29,11 +29,18 @@ class QueryConfig:
     embedder_model: str = "intfloat/multilingual-e5-base"
     llm_name: str = "gpt-4o"
     prompt_template: str = """
-    Given the following context, answer the question.
+    Given the following conversation history and context, answer the question.
+    
+    Conversation History:
+    {% for message in conversation_history %}
+    {{ message.role }}: {{ message.content }}
+    {% endfor %}
+    
     Context:
     {% for document in documents %}
         {{ document.content }}
     {% endfor %}
+    
     Question: {{query}}
     Answer:
     """
@@ -112,7 +119,7 @@ class QueryService:
 
         #print(f"\n--- Query Pipeline ---\n{self.pipeline.dumps()}")
 
-    def search(self, query: str, filters: Optional[dict] = None):
+    def search(self, query: str, filters: Optional[dict] = None, conversation_history: Optional[list] = None):
         if self.pipeline is None:
             raise ValueError("Query pipeline has not been initialized")
 
@@ -121,7 +128,7 @@ class QueryService:
             "bm25_retriever": {"query": query, "filters": filters},
             "query_embedder": {"text": query},
             "answer_builder": {"query": query},
-            "prompt_builder": {"query": query}
+            "prompt_builder": {"query": query, "conversation_history": conversation_history or []}
         }
 
         logger.info("Running query pipeline...")
