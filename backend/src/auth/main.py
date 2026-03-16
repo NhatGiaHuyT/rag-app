@@ -142,13 +142,14 @@ def require_admin(current_user: int = Depends(get_current_user), db: Session = D
         raise HTTPException(status_code=403, detail="User not found")
     return user.username
 
-@app.post("/register", response_model=UserResponse)
+@app.post("/register", response_model=Token)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = get_user(db, user.username)
+    db_user = db.query(User).filter((User.username == user.username) | (User.email == user.email)).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
+        raise HTTPException(status_code=400, detail="Username or email already registered")
     db_user = create_user(db, user.username, user.email, user.password)
-    return UserResponse(username=db_user.username, email=db_user.email)
+    access_token = create_access_token(data={"sub": db_user.username, "user_id": db_user.id})
+    return Token(access_token=access_token, token_type="bearer")
 
 @app.post("/token", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -157,6 +158,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     access_token = create_access_token(data={"sub": user.username, "user_id": user.id})
     return Token(access_token=access_token, token_type="bearer")
+
+@app.get("/me", response_model=UserResponse)
+def get_me(current_user: int = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == current_user).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserResponse(id=user.id, username=user.username, email=user.email, role=user.role, is_active=user.is_active, created_at=user.created_at)
 
 # Conversation endpoints
 @app.post("/conversations", response_model=ConversationResponse)

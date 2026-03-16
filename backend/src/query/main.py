@@ -14,7 +14,7 @@ from common.api_utils import create_api
 from common.models import SearchQuery, QueryResultsResponse
 from common.document_store import initialize_document_store
 from common.config import settings
-from common.auth_utils import get_current_user
+from common.auth_utils import get_current_user, get_token
 from query.service import QueryService
 from query.serializer import serialize_query_result
 
