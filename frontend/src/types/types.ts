@@ -1,4 +1,4 @@
-export type OpenAIModel = 'gpt-4o' | 'gpt-3.5-turbo';
+export type OpenAIModel = 'gpt-4o' | 'gpt-3.5-turbo' | 'RAG Model';
 
 export interface ChatBody {
   inputCode: string;

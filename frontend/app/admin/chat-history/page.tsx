@@ -6,22 +6,122 @@ import {
   Flex,
   SimpleGrid,
   useColorModeValue,
+  Spinner,
+  Center,
 } from '@chakra-ui/react';
 import { MdChat, MdToken, MdTimer, MdBolt } from 'react-icons/md';
 import Card from '@/components/card/Card';
 import StatsCard from '@/components/admin/StatsCard';
 import ChatLogTable from '@/components/admin/ChatLogTable';
-import { mockChatLogs } from '@/utils/adminData';
+import { useState, useEffect } from 'react';
+import { OpenAIModel } from '@/types/types';
+
+interface Conversation {
+  id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Message {
+  id: number;
+  role: string;
+  content: string;
+  created_at: string;
+  rating?: number;
+  feedback?: string;
+  is_manual: boolean;
+}
+
+interface ChatLog {
+  id: string;
+  userId: string;
+  userName: string;
+  model: OpenAIModel;
+  prompt: string;
+  response: string;
+  tokensUsed: number;
+  timestamp: string;
+  duration: number;
+}
 
 export default function ChatHistoryPage() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [chatLogs, setChatLogs] = useState<ChatLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const textColor = useColorModeValue('navy.700', 'white');
   const secondaryText = useColorModeValue('gray.500', 'gray.400');
 
-  const totalTokens = mockChatLogs.reduce((s, l) => s + l.tokensUsed, 0);
-  const avgDuration = Math.round(
-    mockChatLogs.reduce((s, l) => s + l.duration, 0) / mockChatLogs.length,
-  );
-  const gpt4Count = mockChatLogs.filter((l) => l.model === 'gpt-4o').length;
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  const fetchConversations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/auth/admin/conversations', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data);
+        await fetchAllMessages(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch conversations:', error);
+    }
+    setLoading(false);
+  };
+
+  const fetchAllMessages = async (convs: Conversation[]) => {
+    const logs: ChatLog[] = [];
+    for (const conv of convs) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/auth/admin/conversations/${conv.id}/messages`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const messages: Message[] = await response.json();
+          // Group messages into user-assistant pairs
+          for (let i = 0; i < messages.length; i += 2) {
+            const userMsg = messages[i];
+            const assistantMsg = messages[i + 1];
+            if (userMsg && userMsg.role === 'user' && assistantMsg && assistantMsg.role === 'assistant') {
+              logs.push({
+                id: `${conv.id}-${userMsg.id}`,
+                userId: conv.id.toString(),
+                userName: `User ${conv.id}`,
+                model: 'RAG Model',
+                prompt: userMsg.content,
+                response: assistantMsg.content,
+                tokensUsed: Math.floor((userMsg.content.length + assistantMsg.content.length) / 4), // rough estimate
+                timestamp: userMsg.created_at,
+                duration: 1000, // placeholder
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch messages for conversation ${conv.id}:`, error);
+      }
+    }
+    setChatLogs(logs);
+  };
+
+  if (loading) {
+    return (
+      <Center h="400px">
+        <Spinner size="xl" />
+      </Center>
+    );
+  }
+
+  const totalTokens = chatLogs.reduce((s, l) => s + l.tokensUsed, 0);
+  const avgDuration = chatLogs.length > 0 ? Math.round(
+    chatLogs.reduce((s, l) => s + l.duration, 0) / chatLogs.length,
+  ) : 0;
+  const gpt4Count = chatLogs.filter((l) => l.model === 'RAG Model').length;
 
   return (
     <Box pt={{ base: '10px', md: '20px' }}>
@@ -39,7 +139,7 @@ export default function ChatHistoryPage() {
       <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} spacing="20px" mb="28px">
         <StatsCard
           title="Total Chats"
-          value={mockChatLogs.length}
+          value={chatLogs.length}
           change={8.3}
           icon={<MdChat />}
           iconBg="linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)"
@@ -71,7 +171,7 @@ export default function ChatHistoryPage() {
         <Text fontSize="lg" fontWeight="700" color={textColor} mb="20px">
           Conversation Logs
         </Text>
-        <ChatLogTable logs={mockChatLogs} />
+        <ChatLogTable logs={chatLogs} />
       </Card>
     </Box>
   );

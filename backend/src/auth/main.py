@@ -140,6 +140,8 @@ def require_admin(current_user: int = Depends(get_current_user), db: Session = D
     user = db.query(User).filter(User.id == current_user).first()
     if not user:
         raise HTTPException(status_code=403, detail="User not found")
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user.username
 
 @app.post("/register", response_model=Token)
@@ -442,7 +444,19 @@ def provide_manual_answer(message_id: int, answer: ManualAnswerRequest, admin_us
         created_at=manual_answer.created_at, rating=None, feedback=None, is_manual=True
     )
 
-# Statistics endpoint
+@app.get("/admin/conversations", response_model=List[ConversationResponse])
+def get_all_conversations(admin_user: str = Depends(require_admin), db: Session = Depends(get_db)):
+    conversations = db.query(Conversation).order_by(Conversation.updated_at.desc()).all()
+    return [ConversationResponse(id=c.id, title=c.title, created_at=c.created_at, updated_at=c.updated_at) for c in conversations]
+
+@app.get("/admin/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
+def get_conversation_messages_admin(conversation_id: int, admin_user: str = Depends(require_admin), db: Session = Depends(get_db)):
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    messages = db.query(Message).filter(Message.conversation_id == conversation_id).order_by(Message.created_at).all()
+    return [MessageResponse(id=m.id, role=m.role, content=m.content, created_at=m.created_at, rating=m.rating, feedback=m.feedback, is_manual=m.is_manual) for m in messages]
 @app.get("/admin/stats", response_model=SystemStatsResponse)
 def get_system_stats(admin_user: str = Depends(require_admin), db: Session = Depends(get_db)):
     total_users = db.query(User).count()
@@ -462,6 +476,6 @@ def get_system_stats(admin_user: str = Depends(require_admin), db: Session = Dep
         average_rating=round(average_rating, 2)
     )
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+@app.get("/health")
+def health():
+    return {"status": "healthy"}

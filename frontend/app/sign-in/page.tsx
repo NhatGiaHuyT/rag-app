@@ -55,7 +55,7 @@ export default function SignInPage() {
         <Box bg={hintBg} borderRadius="12px" p="12px" mb="20px">
           <Text fontSize="xs" color={subText} lineHeight="1.7">
             <Badge colorScheme="purple" mr="6px" borderRadius="4px">Admin</Badge>
-            Email: <strong>{ADMIN_EMAIL}</strong> &nbsp;·&nbsp; Password: <strong>admin123</strong>
+            Email: <strong>{ADMIN_EMAIL}</strong> &nbsp;·&nbsp; Password: <strong>admin</strong>
           </Text>
         </Box>
         <VStack spacing="16px" mb="24px">

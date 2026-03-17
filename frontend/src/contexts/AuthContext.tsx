@@ -18,7 +18,7 @@ interface AuthContextType {
 }
 
 // ── Hardcoded admin account ──────────────────────────────────────────────────
-export const ADMIN_EMAIL = 'admin@demo.com';
+export const ADMIN_EMAIL = 'admin@ragapp.com';
 const ADMIN_PASSWORD = 'admin123';
 
 const AuthContext = createContext<AuthContextType>({

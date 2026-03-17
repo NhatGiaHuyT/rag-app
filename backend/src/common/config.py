@@ -32,7 +32,7 @@ class Settings(BaseSettings):
         default=Path(__file__).resolve().parent.parent / "files",
         description="Path to file storage"
     )
-    auth_service_url: str = Field(default="http://localhost:8001", description="Auth service URL")
+    auth_service_url: str = Field(default="http://auth_service:8003", description="Auth service URL")
     
     @model_validator(mode='after')
     def validate_openai_api_key(self):

@@ -54,11 +54,24 @@ async def get_allowed_document_ids(user_id: int, token: str) -> List[int]:
     auth_url = settings.auth_service_url or "http://localhost:8001"
     headers = {"Authorization": f"Bearer {token}"}
     async with httpx.AsyncClient() as client:
+        # Get user info
+        user_response = await client.get(f"{auth_url}/me", headers=headers)
+        if user_response.status_code == 200:
+            user_data = user_response.json()
+            if user_data.get("role") == "admin":
+                # Admin can access all documents
+                docs_response = await client.get(f"{auth_url}/admin/documents", headers=headers)
+                if docs_response.status_code == 200:
+                    docs_data = docs_response.json()
+                    return [d["id"] for d in docs_data]
+                else:
+                    return []
+        
+        # For regular users, get allowed documents
         response = await client.get(f"{auth_url}/documents/ids", headers=headers)
         if response.status_code == 200:
             return response.json()
         else:
-            logger.error(f"Failed to get allowed documents: {response.status_code}")
             return []
 
 @app.post("/search", response_model=QueryResultsResponse)
@@ -104,6 +117,6 @@ async def search(
         logger.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+@app.get("/health")
+def health():
+    return {"status": "healthy"}

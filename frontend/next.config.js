@@ -15,6 +15,22 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/auth/:path*',
+        destination: 'http://localhost:8003/:path*',
+      },
+      {
+        source: '/api/files/:path*',
+        destination: 'http://localhost:8001/files/:path*',
+      },
+      {
+        source: '/api/search/:path*',
+        destination: 'http://localhost:8002/search/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

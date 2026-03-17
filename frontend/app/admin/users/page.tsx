@@ -1,72 +1,133 @@
 ﻿'use client';
 import {
-  Box,
-  Heading,
-  Text,
-  Flex,
-  SimpleGrid,
-  useColorModeValue,
+  Box, Heading, Text, Flex, useColorModeValue, Button, Input, useToast, Spinner, Center, Table, Thead, Tbody, Tr, Th, Td, IconButton, Menu, MenuButton, MenuList, MenuItem, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, FormControl, FormLabel, useDisclosure
 } from '@chakra-ui/react';
-import { MdPeople, MdPersonAdd, MdBlock, MdCheckCircle } from 'react-icons/md';
-import Card from '@/components/card/Card';
-import StatsCard from '@/components/admin/StatsCard';
-import UsersTable from '@/components/admin/UsersTable';
-import { mockUsers } from '@/utils/adminData';
+import { MdAdd, MdDelete, MdEdit, MdMoreVert } from 'react-icons/md';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
 
 export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const { isAdmin } = useAuth();
+  const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
   const textColor = useColorModeValue('navy.700', 'white');
   const secondaryText = useColorModeValue('gray.500', 'gray.400');
 
-  const activeUsers = mockUsers.filter((u) => u.status === 'active').length;
-  const suspendedUsers = mockUsers.filter((u) => u.status === 'suspended').length;
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/auth/admin/users', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch {}
+    setLoading(false);
+  };
+
+  const deleteUser = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/auth/admin/users/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      fetchUsers();
+      toast({ title: 'User deleted', status: 'success' });
+    } catch {
+      toast({ title: 'Delete failed', status: 'error' });
+    }
+  };
+
+  const saveUser = async (userData: any) => {
+    const token = localStorage.getItem('token');
+    const method = editingUser ? 'PUT' : 'POST';
+    const url = editingUser ? `/api/auth/admin/users/${editingUser.id}` : '/api/auth/admin/users';
+    try {
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(userData),
+      });
+      fetchUsers();
+      toast({ title: editingUser ? 'User updated' : 'User created', status: 'success' });
+      onClose();
+    } catch {
+      toast({ title: 'Save failed', status: 'error' });
+    }
+  };
+
+  if (loading) return <Center h="400px"><Spinner /></Center>;
+  if (!isAdmin) return <Text>Admin only</Text>;
 
   return (
-    <Box pt={{ base: '10px', md: '20px' }}>
-      <Flex mb="28px" align="center" justify="space-between" flexWrap="wrap" gap="12px">
-        <Box>
-          <Heading fontSize="2xl" color={textColor} fontWeight="700">
-            User Management
-          </Heading>
-          <Text color={secondaryText} fontSize="sm" mt="4px">
-            Manage all platform users and permissions
-          </Text>
-        </Box>
+    <Box pt="20px">
+      <Flex mb="28px" justify="space-between">
+        <Heading color={textColor}>Users</Heading>
+        <Button leftIcon={<MdAdd />} onClick={onOpen}>Add User</Button>
       </Flex>
 
-      <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} spacing="20px" mb="28px">
-        <StatsCard
-          title="Total Users"
-          value={mockUsers.length}
-          icon={<MdPeople />}
-          iconBg="linear-gradient(135deg, #868CFF 0%, #4318FF 100%)"
-        />
-        <StatsCard
-          title="Active Users"
-          value={activeUsers}
-          icon={<MdCheckCircle />}
-          iconBg="linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)"
-        />
-        <StatsCard
-          title="Suspended"
-          value={suspendedUsers}
-          icon={<MdBlock />}
-          iconBg="linear-gradient(135deg, #FA709A 0%, #FEE140 100%)"
-        />
-        <StatsCard
-          title="New This Month"
-          value={3}
-          change={50}
-          icon={<MdPersonAdd />}
-          iconBg="linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)"
-        />
-      </SimpleGrid>
+      <Table>
+        <Thead>
+          <Tr><Th>Username</Th><Th>Email</Th><Th>Role</Th><Th>Active</Th><Th>Actions</Th></Tr>
+        </Thead>
+        <Tbody>
+          {users.map((user) => (
+            <Tr key={user.id}>
+              <Td>{user.username}</Td>
+              <Td>{user.email}</Td>
+              <Td>{user.role}</Td>
+              <Td>{user.is_active ? 'Yes' : 'No'}</Td>
+              <Td>
+                <Menu>
+                  <MenuButton as={IconButton} icon={<MdMoreVert />}>
+                  </MenuButton>
+                  <MenuList>
+                    <MenuItem icon={<MdEdit />} onClick={() => { setEditingUser(user); onOpen(); }}>
+                      Edit
+                    </MenuItem>
+                    <MenuItem icon={<MdDelete />} onClick={() => deleteUser(user.id)} color="red.500">
+                      Delete
+                    </MenuItem>
+                  </MenuList>
+                </Menu>
+              </Td>
+            </Tr>
+          ))}
+        </Tbody>
+      </Table>
 
-      <Card p="24px">
-        <Text fontSize="lg" fontWeight="700" color={textColor} mb="20px">
-          All Users
-        </Text>
-        <UsersTable users={mockUsers} />
-      </Card>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{editingUser ? 'Edit User' : 'Add User'}</ModalHeader>
+          <ModalBody>
+            <FormControl><FormLabel>Username</FormLabel><Input value={editingUser?.username || ''} onChange={(e) => setEditingUser({ ...editingUser!, username: e.target.value } as User)} /></FormControl>
+            <FormControl mt="4"><FormLabel>Email</FormLabel><Input value={editingUser?.email || ''} onChange={(e) => setEditingUser({ ...editingUser!, email: e.target.value } as User)} /></FormControl>
+            <FormControl mt="4"><FormLabel>Password</FormLabel><Input type="password" placeholder="Leave blank to keep current" /></FormControl>
+            <FormControl mt="4"><FormLabel>Role</FormLabel><Input value={editingUser?.role || ''} onChange={(e) => setEditingUser({ ...editingUser!, role: e.target.value } as User)} /></FormControl>
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onClose} mr="3">Cancel</Button>
+            <Button onClick={() => saveUser(editingUser || { username: '', email: '', password: '', role: 'user' })}>Save</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
