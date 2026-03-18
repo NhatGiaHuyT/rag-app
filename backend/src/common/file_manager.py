@@ -62,3 +62,10 @@ class FileManager:
         os.replace(temp_full_path, final_full_path)
 
         return final_full_path
+
+    def get_file_path(self, filename: str) -> str | None:
+        """Get the full path for a filename."""
+        for path in self.file_paths:
+            if os.path.basename(path) == filename:
+                return path
+        return None

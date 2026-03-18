@@ -104,19 +104,6 @@ export default function HeaderLinks(props: {
           maxW={{ base: '360px', md: 'unset' }}
         >
           <Flex flexDirection="column" gap="10px">
-            <NavLink href="/all-templates">
-              <Button
-                variant="primary"
-                py="20px"
-                px="16px"
-                fontSize="sm"
-                borderRadius="45px"
-                w="100%"
-                h="54px"
-              >
-                Browse AI Templates
-              </Button>
-            </NavLink>
             <NavLink href="/settings">
               <Button
                 bg={buttonBg}
@@ -132,19 +119,6 @@ export default function HeaderLinks(props: {
                 _active={activeButton}
               >
                 Profile Settings
-              </Button>
-            </NavLink>
-            <NavLink href="/my-plan">
-              <Button
-                w="100%"
-                h="44px"
-                variant="no-hover"
-                color={textColor}
-                fontSize="sm"
-                borderRadius="45px"
-                bg="transparent"
-              >
-                My Plan
               </Button>
             </NavLink>
           </Flex>
@@ -191,11 +165,6 @@ export default function HeaderLinks(props: {
                 <NavLink href="/settings">
                   <MenuItem _hover={{ bg: 'none' }} _focus={{ bg: 'none' }} color={textColor} borderRadius="8px" px="14px">
                     <Text fontWeight="500" fontSize="sm">Profile Settings</Text>
-                  </MenuItem>
-                </NavLink>
-                <NavLink href="/my-plan">
-                  <MenuItem _hover={{ bg: 'none' }} _focus={{ bg: 'none' }} color={textColor} borderRadius="8px" px="14px">
-                    <Text fontWeight="500" fontSize="sm">My Plan</Text>
                   </MenuItem>
                 </NavLink>
                 <MenuItem _hover={{ bg: 'none' }} _focus={{ bg: 'none' }} color="red.400"

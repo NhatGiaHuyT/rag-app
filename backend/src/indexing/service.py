@@ -165,3 +165,49 @@ class IndexingService:
 
     def rescan_files_and_paths(self) -> List[str]:
         return self.file_manager.add_files_and_paths()
+
+    def reindex_files(self, filenames: List[str]) -> bool:
+        """
+        Reindex specific files by first deleting existing documents and then reindexing.
+        
+        Args:
+            filenames: List of filenames to reindex
+            
+        Returns:
+            True if successful
+        """
+        if self.pipeline is None:
+            raise ValueError("Indexing pipeline has not been initialized")
+        
+        try:
+            # Delete existing documents for these files
+            for filename in filenames:
+                # Find documents with this filename
+                docs_to_delete = self.config.document_store.filter_documents(
+                    filters={"file_name": filename}
+                )
+                if docs_to_delete:
+                    doc_ids = [doc.id for doc in docs_to_delete]
+                    self.config.document_store.delete_documents(doc_ids)
+                    logger.info(f"Deleted {len(doc_ids)} documents for file {filename}")
+            
+            # Reindex the files
+            file_paths = []
+            for filename in filenames:
+                full_path = self.file_manager.get_file_path(filename)
+                if full_path and Path(full_path).exists():
+                    file_paths.append(full_path)
+                else:
+                    logger.warning(f"File {filename} not found in file manager")
+            
+            if file_paths:
+                result = self.pipeline.run({"file_type_router": {"sources": file_paths}})
+                logger.info(f"Reindexing result: {result}")
+                return True
+            else:
+                logger.warning("No valid files found to reindex")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error during reindexing: {e}")
+            return False

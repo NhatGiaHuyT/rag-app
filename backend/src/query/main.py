@@ -8,7 +8,11 @@ from typing import List
 import httpx
 
 from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from collections import defaultdict
+import time, StreamingResponse
 
 from common.api_utils import create_api
 from common.models import SearchQuery, QueryResultsResponse
@@ -34,6 +38,40 @@ logging.getLogger("haystack").setLevel(settings.haystack_log_level)
 document_store = initialize_document_store()
 query_service = QueryService(document_store)
 
+import time
+
+# Rate limiting
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, max_requests: int = 10, window_seconds: int = 60):
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = defaultdict(list)
+    
+    async def dispatch(self, request: Request, call_next):
+        # Get client IP
+        client_ip = request.client.host if request.client else "unknown"
+        
+        # Clean old requests
+        current_time = time.time()
+        self.requests[client_ip] = [
+            req_time for req_time in self.requests[client_ip]
+            if current_time - req_time < self.window_seconds
+        ]
+        
+        # Check rate limit
+        if len(self.requests[client_ip]) >= self.max_requests:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please try again later."}
+            )
+        
+        # Add current request
+        self.requests[client_ip].append(current_time)
+        
+        response = await call_next(request)
+        return response
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
@@ -44,6 +82,9 @@ async def lifespan(app: FastAPI):
     # Add any cleanup code here if needed
 
 app = create_api(title="RAG Query Service", lifespan=lifespan)
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware, max_requests=20, window_seconds=60)  # 20 requests per minute
 
 def get_query_service():
     if query_service.pipeline is None:

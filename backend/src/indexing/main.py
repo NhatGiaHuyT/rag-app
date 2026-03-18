@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 from typing import List
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Body
 from fastapi.responses import JSONResponse
 
 from common.api_utils import create_api
@@ -126,6 +126,33 @@ async def get_files(
 
     logger.info(f"Found files {files}")
     return FilesListResponse(files=files)
+
+@app.post("/reindex")
+async def reindex_files(
+    filenames: List[str] = Body(...),
+    service: IndexingService = Depends(get_indexing_service),
+    current_user: int = Depends(get_current_user)
+):
+    """
+    Reindex specific files by deleting existing documents and reindexing.
+    
+    Parameters:
+    - filenames: List of filenames to reindex
+    
+    Returns:
+    - Success message or error
+    """
+    if not filenames:
+        raise HTTPException(status_code=400, detail="No filenames provided")
+    
+    logger.info(f"Reindexing files: {filenames}")
+    
+    success = service.reindex_files(filenames)
+    
+    if success:
+        return {"message": f"Successfully reindexed {len(filenames)} files"}
+    else:
+        raise HTTPException(status_code=500, detail="Reindexing failed")
 
 @app.get("/health")
 def health():

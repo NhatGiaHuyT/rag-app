@@ -120,14 +120,6 @@ function SidebarContent(props: SidebarContent) {
                   </Flex>
                 </NavLink>
               </Box>
-              <Box>
-                <NavLink href="/my-plan">
-                  <Flex align="center" cursor="pointer" _hover={{ opacity: 0.75 }} transition="0.2s">
-                    <Icon as={IoMdPerson} width="22px" height="22px" color={gray} me="12px" />
-                    <Text color={textColor} fontWeight="500" fontSize="sm">My Plan</Text>
-                  </Flex>
-                </NavLink>
-              </Box>
             </MenuList>
           </Menu>
           {/* Logout */}

@@ -24,10 +24,9 @@ export default function SidebarCard() {
         </Text>
       </Flex>
       <Text fontSize="xs" color={subColor} lineHeight="1.6">
-        Set your <strong>OpenAI API key</strong> via the key icon in the
-        navbar, then start chatting or pick an AI tool.
+        Start chatting with the RAG system or manage your documents.
       </Text>
-      <NavLink href="/all-templates">
+      <NavLink href="/">
         <Flex
           align="center"
           justify="center"
@@ -40,9 +39,9 @@ export default function SidebarCard() {
           _hover={{ opacity: 0.85 }}
           transition="0.2s"
         >
-          <Icon as={MdKey} color="white" w="14px" h="14px" />
+          <Icon as={MdTipsAndUpdates} color="white" w="14px" h="14px" />
           <Text fontSize="xs" fontWeight="600" color="white">
-            Browse AI Templates
+            Start Chatting
           </Text>
         </Flex>
       </NavLink>

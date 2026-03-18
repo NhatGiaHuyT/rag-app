@@ -30,16 +30,6 @@ export default function Footer() {
             Home
           </Link>
         </ListItem>
-        <ListItem me={{ base: '10px', md: '44px' }}>
-          <Link fontWeight="500" fontSize={{ base: 'xs', md: 'sm' }} color={textColor} href="/all-templates">
-            Templates
-          </Link>
-        </ListItem>
-        <ListItem me={{ base: '10px', md: '44px' }}>
-          <Link fontWeight="500" fontSize={{ base: 'xs', md: 'sm' }} color={textColor} href="/my-plan">
-            My Plan
-          </Link>
-        </ListItem>
         <ListItem>
           <Link fontWeight="500" fontSize={{ base: 'xs', md: 'sm' }} color={textColor} href="/settings">
             Settings

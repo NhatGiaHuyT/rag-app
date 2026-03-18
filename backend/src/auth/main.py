@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from common.api_utils import create_api
 from common.auth_utils import get_current_user
 from .models import Base, User, Conversation, Message, Document, DocumentPermission, SystemStats
-from .service import authenticate_user, create_user, create_access_token, get_user
+from .service import create_access_token, create_refresh_token, verify_token
 
 # Database setup
 DATABASE_URL = "sqlite:///./data/auth.db"
@@ -73,9 +73,13 @@ class UserResponse(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
 
 class ConversationCreate(BaseModel):
+    title: str
+
+class ConversationUpdate(BaseModel):
     title: str
 
 class ConversationResponse(BaseModel):
@@ -151,15 +155,27 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Username or email already registered")
     db_user = create_user(db, user.username, user.email, user.password)
     access_token = create_access_token(data={"sub": db_user.username, "user_id": db_user.id})
-    return Token(access_token=access_token, token_type="bearer")
+    refresh_token = create_refresh_token(data={"sub": db_user.username, "user_id": db_user.id})
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
 
-@app.post("/token", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = authenticate_user(db, form_data.username, form_data.password)
+@app.post("/refresh", response_model=Token)
+def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
+    payload = verify_token(refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    
+    username = payload.get("sub")
+    user_id = payload.get("user_id")
+    if not username or not user_id:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    
+    user = db.query(User).filter(User.id == user_id, User.username == username).first()
     if not user:
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
-    access_token = create_access_token(data={"sub": user.username, "user_id": user.id})
-    return Token(access_token=access_token, token_type="bearer")
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    access_token = create_access_token(data={"sub": username, "user_id": user_id})
+    new_refresh_token = create_refresh_token(data={"sub": username, "user_id": user_id})
+    return Token(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 
 @app.get("/me", response_model=UserResponse)
 def get_me(current_user: int = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -189,6 +205,41 @@ def get_conversations(current_user: int = Depends(get_current_user), db: Session
     
     conversations = db.query(Conversation).filter(Conversation.user_id == user.id).order_by(Conversation.updated_at.desc()).all()
     return [ConversationResponse(id=c.id, title=c.title, created_at=c.created_at, updated_at=c.updated_at) for c in conversations]
+
+@app.put("/conversations/{conversation_id}", response_model=ConversationResponse)
+def update_conversation(conversation_id: int, conv_update: ConversationUpdate, current_user: int = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == current_user).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id, Conversation.user_id == user.id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    conversation.title = conv_update.title
+    conversation.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(conversation)
+    
+    return ConversationResponse(id=conversation.id, title=conversation.title, created_at=conversation.created_at, updated_at=conversation.updated_at)
+
+@app.delete("/conversations/{conversation_id}")
+def delete_conversation(conversation_id: int, current_user: int = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == current_user).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id, Conversation.user_id == user.id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Delete all messages in the conversation
+    db.query(Message).filter(Message.conversation_id == conversation_id).delete()
+    # Delete the conversation
+    db.delete(conversation)
+    db.commit()
+    
+    return {"message": "Conversation deleted successfully"}
 
 @app.get("/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
 def get_conversation_messages(conversation_id: int, current_user: int = Depends(get_current_user), db: Session = Depends(get_db)):

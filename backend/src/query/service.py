@@ -4,6 +4,9 @@ import sys
 from dataclasses import dataclass
 import logging
 from typing import Optional
+import hashlib
+import json
+from functools import lru_cache
 
 from haystack import Pipeline
 from haystack.components.embedders import SentenceTransformersTextEmbedder
@@ -86,7 +89,7 @@ def create_query_pipeline(config: QueryConfig) -> Pipeline:
 
     if settings.generator == "openai":
         p.add_component(
-            instance=OpenAIGenerator(model=config.llm_name),
+            instance=OpenAIGenerator(model=config.llm_name, streaming_callback=None),
             name="llm"
         )
     else:
@@ -107,6 +110,7 @@ class QueryService:
     def __init__(self, document_store):
         self.config = QueryConfig(document_store=document_store)
         self.pipeline = None
+        self.cache = {}  # Simple in-memory cache
 
         if settings.pipelines_from_yaml:
             try:
@@ -119,9 +123,25 @@ class QueryService:
 
         #print(f"\n--- Query Pipeline ---\n{self.pipeline.dumps()}")
 
+    def _get_cache_key(self, query: str, filters: Optional[dict] = None, conversation_history: Optional[list] = None):
+        """Generate a cache key for the query."""
+        key_data = {
+            "query": query,
+            "filters": filters or {},
+            "history": conversation_history or []
+        }
+        key_str = json.dumps(key_data, sort_keys=True)
+        return hashlib.md5(key_str.encode()).hexdigest()
+
     def search(self, query: str, filters: Optional[dict] = None, conversation_history: Optional[list] = None):
         if self.pipeline is None:
             raise ValueError("Query pipeline has not been initialized")
+
+        # Check cache first
+        cache_key = self._get_cache_key(query, filters, conversation_history)
+        if cache_key in self.cache:
+            logger.info("Returning cached result")
+            return self.cache[cache_key]
 
         # Component names here should match pipeline definition!
         pipeline_params = {
@@ -140,4 +160,53 @@ class QueryService:
 
         answer = results['answer_builder']['answers'][0]
 
+        # Cache the result (simple cache, no expiration)
+        self.cache[cache_key] = answer
+
         return answer
+
+    def search_streaming(self, query: str, filters: Optional[dict] = None, conversation_history: Optional[list] = None):
+        """
+        Search with streaming response.
+        Returns a generator that yields chunks of the response.
+        """
+        if self.pipeline is None:
+            raise ValueError("Query pipeline has not been initialized")
+
+        # Create a streaming generator
+        streaming_generator = OpenAIGenerator(model=self.config.llm_name)
+        
+        # Temporarily replace the non-streaming generator
+        original_generator = self.pipeline.get_component("llm")
+        self.pipeline.remove_component("llm")
+        self.pipeline.add_component(streaming_generator, name="llm")
+        
+        # Reconnect
+        self.pipeline.connect("prompt_builder.prompt", "llm.prompt")
+        self.pipeline.connect("llm.replies", "answer_builder.replies")
+
+        try:
+            # Component names here should match pipeline definition!
+            pipeline_params = {
+                "bm25_retriever": {"query": query, "filters": filters},
+                "query_embedder": {"text": query},
+                "answer_builder": {"query": query},
+                "prompt_builder": {"query": query, "conversation_history": conversation_history or []}
+            }
+
+            logger.info("Running streaming query pipeline...")
+
+            # Run the query pipeline
+            results = self.pipeline.run(pipeline_params)
+
+            logger.debug(f"Streaming query pipeline.run() results:\n{results}")
+
+            answer = results['answer_builder']['answers'][0]
+
+            return answer
+        finally:
+            # Restore original generator
+            self.pipeline.remove_component("llm")
+            self.pipeline.add_component(original_generator, name="llm")
+            self.pipeline.connect("prompt_builder.prompt", "llm.prompt")
+            self.pipeline.connect("llm.replies", "answer_builder.replies")

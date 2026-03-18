@@ -25,11 +25,21 @@ def serialize_query_result(query: str, answer: GeneratedAnswer) -> QueryResultsR
     return QueryResultsResponse(query_id=query_id, results=[result])
 
 def serialize_answer(answer: GeneratedAnswer) -> AnswerModel:
+    # Generate citations from documents
+    references = []
+    for i, doc in enumerate(answer.documents, 1):
+        file_name = doc.meta.get("file_name") or os.path.basename(doc.meta.get("file_path", ""))
+        split_idx = doc.meta.get("split_idx_start", 0)
+        citation = f"[{i}] {file_name}"
+        if split_idx:
+            citation += f", chunk {split_idx}"
+        references.append(citation)
+    
     return AnswerModel(
         answer=answer.data,
         type="generative",
         document_ids=[doc.id for doc in answer.documents],
-        meta={"_references": []},
+        meta={"_references": references},
         file=serialize_file(answer.documents[0] if answer.documents else None)
     )
 

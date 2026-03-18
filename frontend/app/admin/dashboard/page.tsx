@@ -1,4 +1,5 @@
 ﻿'use client';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -12,6 +13,9 @@ import {
   HStack,
   Avatar,
   Progress,
+  Spinner,
+  Center,
+  useToast,
 } from '@chakra-ui/react';
 import {
   MdPeople,
@@ -20,26 +24,100 @@ import {
   MdSpeed,
   MdTrendingUp,
   MdBarChart,
+  MdDescription,
+  MdStar,
 } from 'react-icons/md';
 import Card from '@/components/card/Card';
 import StatsCard from '@/components/admin/StatsCard';
-import { AdminLineChart } from '@/components/admin/Charts';
-import {
-  mockUsers,
-  mockChatLogs,
-  mockUsageData,
-  getDashboardStats,
-} from '@/utils/adminData';
 
 export default function AdminDashboardPage() {
-  const stats = getDashboardStats();
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const toast = useToast();
+
   const textColor = useColorModeValue('navy.700', 'white');
   const secondaryText = useColorModeValue('gray.500', 'gray.400');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
 
-  const recentLogs = mockChatLogs.slice(0, 5);
-  const topUsers = [...mockUsers]
-    .sort((a, b) => b.tokensUsed - a.tokensUsed)
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      // Fetch system stats
+      const statsResponse = await fetch('/api/auth/admin/stats', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setStats(statsData);
+      }
+
+      // Fetch users
+      const usersResponse = await fetch('/api/auth/admin/users', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (usersResponse.ok) {
+        const usersData = await usersResponse.json();
+        setUsers(usersData);
+      }
+
+      // Fetch conversations
+      const convResponse = await fetch('/api/auth/admin/conversations', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (convResponse.ok) {
+        const convData = await convResponse.json();
+        setConversations(convData);
+      }
+    } catch (error) {
+      toast({
+        title: 'Failed to load dashboard data',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Center h="400px">
+        <Spinner size="xl" />
+      </Center>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <Center h="400px">
+        <Text>Failed to load dashboard data</Text>
+      </Center>
+    );
+  }
+
+  // Mock data for charts (since we don't have real time series data yet)
+  const mockUsageData = [
+    { date: '2024-01-01', tokens: 1200, conversations: 45 },
+    { date: '2024-01-02', tokens: 1350, conversations: 52 },
+    { date: '2024-01-03', tokens: 1180, conversations: 48 },
+    { date: '2024-01-04', tokens: 1420, conversations: 61 },
+    { date: '2024-01-05', tokens: 1380, conversations: 55 },
+    { date: '2024-01-06', tokens: 1520, conversations: 67 },
+    { date: '2024-01-07', tokens: 1480, conversations: 63 },
+  ];
+
+  const recentConversations = conversations.slice(0, 5);
+  const topUsers = users
+    .filter(u => u.role !== 'admin')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5);
 
   return (
@@ -51,7 +129,7 @@ export default function AdminDashboardPage() {
             Admin Dashboard
           </Heading>
           <Text color={secondaryText} fontSize="sm" mt="4px">
-            Overview of your AI platform — March 15, 2026
+            Overview of your RAG system — {new Date().toLocaleDateString()}
           </Text>
         </Box>
         <Badge colorScheme="green" borderRadius="20px" px="12px" py="4px" fontSize="sm">
@@ -63,7 +141,7 @@ export default function AdminDashboardPage() {
       <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} spacing="20px" mb="28px">
         <StatsCard
           title="Total Users"
-          value={stats.totalUsers}
+          value={stats.total_users}
           change={12.5}
           changeLabel="vs last month"
           icon={<MdPeople />}
@@ -71,26 +149,26 @@ export default function AdminDashboardPage() {
         />
         <StatsCard
           title="Total Conversations"
-          value={stats.totalChats}
+          value={stats.total_conversations}
           change={8.3}
           changeLabel="vs last month"
           icon={<MdChat />}
           iconBg="linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)"
         />
         <StatsCard
-          title="Tokens Used"
-          value={`${(stats.totalTokens / 1000).toFixed(1)}K`}
+          title="Total Questions"
+          value={stats.total_questions}
           change={15.2}
           changeLabel="vs last month"
-          icon={<MdToken />}
+          icon={<MdDescription />}
           iconBg="linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)"
         />
         <StatsCard
-          title="System Uptime"
-          value={stats.uptime}
+          title="Average Rating"
+          value={`${stats.average_rating}/5`}
           change={0.2}
           changeLabel="this month"
-          icon={<MdSpeed />}
+          icon={<MdStar />}
           iconBg="linear-gradient(135deg, #FA709A 0%, #FEE140 100%)"
         />
       </SimpleGrid>
@@ -102,16 +180,10 @@ export default function AdminDashboardPage() {
           <Flex align="center" mb="20px" gap="8px">
             <MdTrendingUp color="#4318FF" size="20px" />
             <Text fontSize="lg" fontWeight="700" color={textColor}>
-              Token Usage (Last 15 Days)
+              Activity Overview (Mock Data)
             </Text>
           </Flex>
-          <AdminLineChart
-            data={mockUsageData}
-            dataKeys={[
-              { key: 'tokens', color: '#4318FF', name: 'Tokens' },
-              { key: 'conversations', color: '#00F2FE', name: 'Conversations' },
-            ]}
-          />
+          <Text>Chart coming soon...</Text>
         </Card>
 
         {/* Top Users */}
@@ -124,27 +196,21 @@ export default function AdminDashboardPage() {
           </Flex>
           <VStack spacing="14px" align="stretch">
             {topUsers.map((user, i) => {
-              const maxTokens = topUsers[0].tokensUsed;
+              const maxTokens = topUsers[0]?.tokensUsed || 1;
               const pct = Math.round((user.tokensUsed / maxTokens) * 100);
               return (
                 <Box key={user.id}>
                   <Flex align="center" justify="space-between" mb="6px">
                     <HStack spacing="8px">
-                      <Avatar src={user.avatar} name={user.name} size="xs" />
+                      <Avatar name={user.username} size="xs" />
                       <Text fontSize="sm" fontWeight="500" color={textColor} noOfLines={1}>
-                        {user.name}
+                        {user.username}
                       </Text>
                     </HStack>
                     <Text fontSize="xs" color={secondaryText}>
-                      {(user.tokensUsed / 1000).toFixed(1)}K
+                      {new Date(user.created_at).toLocaleDateString()}
                     </Text>
                   </Flex>
-                  <Progress
-                    value={pct}
-                    size="xs"
-                    borderRadius="full"
-                    colorScheme={i === 0 ? 'brand' : 'blue'}
-                  />
                 </Box>
               );
             })}
@@ -152,47 +218,28 @@ export default function AdminDashboardPage() {
         </Card>
       </Grid>
 
-      {/* Recent Activity */}
+      {/* Recent Conversations */}
       <Card p="24px">
-        <Text fontSize="lg" fontWeight="700" color={textColor} mb="20px">
-          Recent Conversations
-        </Text>
-        <VStack spacing="0" align="stretch">
-          {recentLogs.map((log, i) => (
-            <Flex
-              key={log.id}
-              py="12px"
-              align="center"
-              gap="12px"
-              borderBottom={i < recentLogs.length - 1 ? '1px solid' : 'none'}
-              borderColor={borderColor}
-            >
-              <Avatar name={log.userName} size="sm" />
-              <Box flex="1" minW="0">
-                <Flex align="center" gap="8px" flexWrap="wrap">
-                  <Text fontSize="sm" fontWeight="600" color={textColor}>
-                    {log.userName}
+        <Flex align="center" mb="20px" gap="8px">
+          <MdChat color="#4318FF" size="20px" />
+          <Text fontSize="lg" fontWeight="700" color={textColor}>
+            Recent Conversations
+          </Text>
+        </Flex>
+        <VStack spacing="12px" align="stretch">
+          {recentConversations.map((conv) => (
+            <Box key={conv.id} p="12px" borderRadius="md" bg="gray.50" _dark={{ bg: 'gray.700' }}>
+              <Flex justify="space-between" align="start">
+                <VStack align="start" spacing="4px" flex={1}>
+                  <Text fontSize="sm" fontWeight="600" color={textColor} noOfLines={2}>
+                    {conv.title}
                   </Text>
-                  <Badge
-                    colorScheme={log.model === 'gpt-4o' ? 'purple' : 'blue'}
-                    borderRadius="8px"
-                    px="6px"
-                    fontSize="xs"
-                  >
-                    {log.model}
-                  </Badge>
-                </Flex>
-                <Text fontSize="sm" color={secondaryText} noOfLines={1}>
-                  {log.prompt}
-                </Text>
-              </Box>
-              <Box textAlign="right" flexShrink={0}>
-                <Text fontSize="xs" color={secondaryText}>{log.timestamp}</Text>
-                <Text fontSize="xs" color="brand.500" fontWeight="600">
-                  {log.tokensUsed} tokens
-                </Text>
-              </Box>
-            </Flex>
+                  <Text fontSize="xs" color={secondaryText}>
+                    Updated: {new Date(conv.updated_at).toLocaleString()}
+                  </Text>
+                </VStack>
+              </Flex>
+            </Box>
           ))}
         </VStack>
       </Card>

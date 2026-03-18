@@ -31,6 +31,7 @@ import {
   ModalBody,
   ModalCloseButton,
   useDisclosure,
+  Progress,
 } from '@chakra-ui/react';
 import { MdFileUpload, MdDelete, MdMoreVert, MdFilePresent } from 'react-icons/md';
 import { useState, useEffect, useRef } from 'react';
@@ -44,6 +45,8 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
@@ -77,15 +80,45 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
 
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFilesUpload(files);
+    }
+  };
+
+  const handleFilesUpload = async (files: FileList) => {
     setUploading(true);
+    setUploadProgress(0);
+    
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i]);
     }
+
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 10;
+      });
+    }, 200);
 
     try {
       const token = localStorage.getItem('token');
@@ -97,6 +130,9 @@ export default function DocumentsPage() {
         body: formData,
       });
 
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
       if (response.ok) {
         toast({ title: 'Files uploaded successfully', status: 'success', duration: 3000, isClosable: true });
         fetchDocuments(); // Refresh the list
@@ -104,12 +140,24 @@ export default function DocumentsPage() {
         toast({ title: 'Failed to upload files', status: 'error', duration: 3000, isClosable: true });
       }
     } catch (error) {
+      clearInterval(progressInterval);
       toast({ title: 'Error uploading files', status: 'error', duration: 3000, isClosable: true });
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setTimeout(() => {
+        setUploading(false);
+        setUploadProgress(0);
+      }, 500);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    await handleFilesUpload(files);
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -169,15 +217,54 @@ export default function DocumentsPage() {
         >
           Upload Documents
         </Button>
-        <Input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          multiple
-          accept=".pdf,.txt,.md,.doc,.docx"
-          display="none"
-        />
       </Flex>
+
+      {/* Drag and Drop Zone */}
+      <Card 
+        p="24px" 
+        mb="24px"
+        border={dragOver ? "2px dashed" : "2px dashed"}
+        borderColor={dragOver ? "brand.500" : borderColor}
+        bg={dragOver ? "brand.50" : "transparent"}
+        transition="all 0.2s"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        cursor="pointer"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <Center py="40px">
+          <VStack spacing="16px">
+            <MdFileUpload size="48px" color={dragOver ? "#422AFB" : "#A0AEC0"} />
+            <VStack spacing="8px">
+              <Text fontSize="lg" fontWeight="600" color={textColor}>
+                {dragOver ? "Drop files here" : "Drag & drop files here"}
+              </Text>
+              <Text color={secondaryText} fontSize="sm">
+                or click to browse files (PDF, TXT, MD supported)
+              </Text>
+              {uploading && (
+                <VStack spacing="8px" w="100%" maxW="300px">
+                  <Progress value={uploadProgress} size="sm" colorScheme="brand" w="100%" />
+                  <Text fontSize="xs" color={secondaryText}>
+                    {uploadProgress}% uploaded
+                  </Text>
+                </VStack>
+              )}
+            </VStack>
+            {!uploading && <Spinner size="md" />}
+          </VStack>
+        </Center>
+      </Card>
+
+      <Input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        multiple
+        accept=".pdf,.txt,.md,.doc,.docx"
+        display="none"
+      />
 
       <Card p="24px">
         <Text fontSize="lg" fontWeight="700" color={textColor} mb="20px">
