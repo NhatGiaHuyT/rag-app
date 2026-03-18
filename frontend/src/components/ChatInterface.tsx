@@ -154,6 +154,25 @@ export default function ChatInterface({ conversationId, onNewConversation }: Cha
         body: JSON.stringify({ content: userMessage.content }),
       });
 
+  // Fetch conversation history and transform for backend
+      const conversation_history: Array<{role: string, content: string}> = [];
+      if (currentConversationId) {
+        try {
+          const historyRes = await fetch(`/api/auth/conversations/${currentConversationId}/messages`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (historyRes.ok) {
+            const history = await historyRes.json() as Message[];
+            conversation_history.push(...history.slice(0, -1).map(msg => ({ 
+              role: msg.role === 'user' ? 'user' : 'assistant',
+              content: msg.content
+            }))); 
+          }
+        } catch (histErr) {
+          console.warn('Failed to fetch history:', histErr);
+        }
+      }
+
       // Then get AI response
       const searchResponse = await fetch('/api/search', {
         method: 'POST',
@@ -163,13 +182,13 @@ export default function ChatInterface({ conversationId, onNewConversation }: Cha
         },
         body: JSON.stringify({
           query: userMessage.content,
-          conversation_id: currentConversationId,
+          conversation_history: conversation_history,
         }),
       });
 
       if (searchResponse.ok) {
         const searchData = await searchResponse.json();
-        const answer = searchData.results[0]?.answers[0];
+        const answer = searchData.results?.[0]?.answers?.[0];
         const references = answer?.meta?._references || [];
 
         const aiMessage: Message = {
@@ -184,10 +203,13 @@ export default function ChatInterface({ conversationId, onNewConversation }: Cha
         setCurrentResponse(answer?.answer || 'No answer found.');
         setCurrentReferences(references);
       } else {
+        const errorText = await searchResponse.text();
+        console.error('Search failed:', searchResponse.status, errorText);
         toast({
-          title: 'Failed to get response',
+          title: `Failed to get response (${searchResponse.status})`,
+          description: errorText ? errorText.substring(0, 200) : 'Unknown error',
           status: 'error',
-          duration: 3000,
+          duration: 5000,
           isClosable: true,
         });
       }

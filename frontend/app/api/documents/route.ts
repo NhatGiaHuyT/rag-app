@@ -10,9 +10,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Forward the request to the backend
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    const response = await fetch(`${backendUrl}/documents`, {
+    // Forward the request to the auth service
+    const response = await fetch('http://auth_service:8003/documents', {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
